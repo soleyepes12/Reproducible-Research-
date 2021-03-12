@@ -1,0 +1,148 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+Reproducible Research 
+======================
+
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+# Loading and processing the data
+
+## Loading the data
+
+```{r readdata, echo=TRUE}
+library(readxl)
+Data <- read.csv("activity.csv")
+str(Data)
+```
+
+# What is mean total number of steps taken per day?
+```{r}
+library(dplyr)
+total.steps <- tapply(Data$steps, Data$date, FUN=sum, na.rm=TRUE)
+head(total.steps, n = 5)
+```
+
+## 1. Histogram
+```{r}
+hist(total.steps,
+     col = "Purple",
+     main = "Histogram",
+     xlab = "Total number of steps",
+     ylab = "Frequency",
+     breaks = 30)
+```
+
+## 2. Mean and media
+```{r}
+steps_Mean <- mean(total.steps, na.rm = TRUE)
+steps_Median <- median(total.steps, na.rm = TRUE)
+```
+
+* Mean: `steps_Mean`
+* Media: `steps_Media`
+
+# What is the average daily activity pattern?
+```{r}
+averages <- aggregate(x = list(steps =  Data$steps), 
+                      by = list(interval = Data$interval), 
+                      FUN = mean, 
+                      na.rm = TRUE)
+head(averages, n = 5)
+```
+
+## 1. Time series plote
+```{r}
+library(ggplot2)
+ggplot(data = averages, aes(x = interval, y = steps)) +
+  geom_line(color = "purple", size = 2) +
+  labs(title = "Time series plot") +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12)) +
+  xlab("5 minutes interval") +
+  ylab("Number of steps")
+```
+
+## 2. Interval with the maximun number of steps
+```{r}
+averages[which.max(averages$steps),]
+```
+
+# Imputing missing values
+
+here are a number of days/intervals where there are missing values (coded as \color{red}{\verb|NA|}NA). The presence of missing days may introduce bias into some calculations or summaries of the data
+
+## 1. Total number of missing values
+```{r}
+missing_values <- length(which(is.na(Data$steps)))
+missing_values
+```
+
+## 2. Strategy for filling values in the data set
+
+In order to fill the data set with the missing data we are going to do the following steps:
+
+* Create the variable "interval_steps" in which we fill the missing values with the mean with the R function "apply - tapply"
+* Create the variable "Data split" which is the split activity data by intervals
+* Fill the missing data for each interval
+
+## 3. New dataset
+```{r}
+Interval_steps <- tapply(Data$steps, Data$interval, mean, na.rm = TRUE)
+Data_split <- split(Data, Data$interval)
+for(i in 1:length(Data_split)){
+    Data_split[[i]]$steps[is.na(Data_split[[i]]$steps)] <- Interval_steps[i]
+}
+activity.imputed <- do.call("rbind", Data_split)
+activity.imputed <- activity.imputed[order(activity.imputed$date) ,]
+head(activity.imputed, n = 5)
+```
+
+## 4. Histogram of the total number of days
+
+To be able to visualize the total number of steps taken each day first it i necessary to calculate the total steps with impute values.
+
+```{r}
+StepsPerDay.imputed <- tapply(activity.imputed$steps, activity.imputed$date, sum)
+```
+
+With the data the next step is to plot the results
+
+```{r}
+hist(StepsPerDay.imputed,
+     col = "Purple",
+     main = "Histogram: Steps per Day",
+     xlab = "Number of Steps",
+     breaks = 15)
+```
+With the new data, we want to see if  the total daily number of spetps changes imputing missing values. To be able to perform that, we need to calculate the mean and media of the new data set
+
+```{r}
+Mean_imputed <- mean(StepsPerDay.imputed, na.rm = TRUE)
+Median_imputed <- median(StepsPerDay.imputed, na.rm = TRUE)
+```
+
+* Mean: `Mean_imputed`
+* Media: `Median_imputed`
+
+# Are there differences in activity patterns between weekdays and weekends?
+
+## 1. New factor variable in the dataset with two levels – “weekday” and “weekend” 
+```{r}
+library(dplyr)
+Data_new <- mutate(activity.imputed, weektype = ifelse(weekdays(as.Date(activity.imputed$date)) == "Saturday" | weekdays(as.Date(activity.imputed$date)) == "Sunday", "weekend", "weekday"))
+Data_new$weektype <- as.factor(Data_new$weektype)
+head(Data_new)
+```
+
+## 2.
+```{r}
+interval_full <- Data_new %>%
+  group_by(interval, weektype) %>%
+  summarise(steps = mean(steps))
+
+ggplot(interval_full, aes(x=interval, y=steps, color = weektype)) +
+  geom_line(size = 2) +
+  facet_wrap(~weektype, ncol = 1, nrow=2)
+```
